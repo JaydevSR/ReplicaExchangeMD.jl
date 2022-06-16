@@ -1,0 +1,7 @@
+name = "REMD"
+uuid = "a8f12556-1dc6-44fb-996d-42775a54c232"
+authors = ["JaydevSR <jaydevsr7701@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Molly = "aa0f7f06-fcc0-5ec4-a7f3-a573f33f9c4c"
