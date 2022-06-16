@@ -1,11 +1,12 @@
-using Molly
+export ReplicaSystem
 
-mutable struct ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, RI, B, NF, L, F, E} <: AbstractSystem{D}
+mutable struct ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, L, F, E} <: AbstractSystem{D}
     atoms::A
     atoms_data::AD
     pairwise_inters::PI
     specific_inter_lists::SI
     general_inters::GI
+    n_replicas::Integer
     replicas::RS
     box_size::B
     neighbor_finder::NF
@@ -49,15 +50,50 @@ function ReplicaSystem(;
     NF = typeof(neighbor_finder)
     F = typeof(force_units)
     E = typeof(energy_units)
+    C = typeof(coords)
+    V = typeof(velocities)
 
-    replicas = [IndividualReplica(i, coords, velocities) for i=1:n_replicas]
-    RS = typeof(replica_list)
+    replicas = Dict(["$i", IndividualReplica{C, V}(i, coords, velocities)] for i=1:n_replicas)
+    RS = typeof(replicas)
 
     replica_loggers = Dict(["$i", copy(loggers)] for i=1:n_replicas)
-    RL = typeof(replica_loggers)
+    L = typeof(replica_loggers)
 
     return ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, L, F, E}(
             atoms, atoms_data, pairwise_inters, specific_inter_lists,
-            general_inters, replicas, box_size, neighbor_finder,
+            general_inters, n_replicas, replicas, box_size, neighbor_finder,
             replica_loggers, force_units, energy_units)
+end
+
+is_gpu_diff_safe(::ReplicaSystem{D, G}) where {D, G} = G
+
+float_type(::ReplicaSystem{D, G, T}) where {D, G, T} = T
+
+AtomsBase.species_type(s::ReplicaSystem) = eltype(s.atoms)
+
+Base.getindex(s::ReplicaSystem, i::Integer) = AtomView(s, i)
+Base.length(s::ReplicaSystem) = length(s.atoms)
+
+AtomsBase.position(s::ReplicaSystem, ri::Integer) = s.replicas["$ri"].coords
+AtomsBase.position(s::ReplicaSystem, ri::Integer, i::Integer) = s.replicas["$ri"].coords[i]
+
+AtomsBase.velocity(s::ReplicaSystem, ri::Integer) = s.replicas["$ri"].velocities
+AtomsBase.velocity(s::ReplicaSystem, ri::Integer, i::Integer) = s.replicas["$ri"].velocities[i]
+
+AtomsBase.atomic_mass(s::ReplicaSystem, i::Integer) = mass(s.atoms[i])
+AtomsBase.atomic_symbol(s::ReplicaSystem, i::Integer) = Symbol(s.atoms_data[i].element)
+AtomsBase.atomic_number(s::ReplicaSystem, i::Integer) = missing
+
+AtomsBase.boundary_conditions(::ReplicaSystem{3}) = SVector(Periodic(), Periodic(), Periodic())
+AtomsBase.boundary_conditions(::ReplicaSystem{2}) = SVector(Periodic(), Periodic())
+
+function AtomsBase.bounding_box(s::ReplicaSystem)
+    bs = s.box_size
+    z = zero(bs[1])
+    bb = edges_to_box(bs, z)
+    return unit(z) == NoUnits ? (bb)u"nm" : bb # Assume nm without other information
+end
+
+function Base.show(io::IO, s::ReplicaSystem)
+    print(io, "ReplicaSystem containing ",  s.n_replicas, " replicas with ", length(s), " atoms, box size ", s.box_size)
 end
