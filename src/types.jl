@@ -76,9 +76,11 @@ Base.length(s::ReplicaSystem) = length(s.atoms)
 
 AtomsBase.position(s::ReplicaSystem, ri::Integer) = s.replicas["$ri"].coords
 AtomsBase.position(s::ReplicaSystem, ri::Integer, i::Integer) = s.replicas["$ri"].coords[i]
+AtomsBase.position(s::ReplicaSystem) = error("Replica index required.")
 
 AtomsBase.velocity(s::ReplicaSystem, ri::Integer) = s.replicas["$ri"].velocities
 AtomsBase.velocity(s::ReplicaSystem, ri::Integer, i::Integer) = s.replicas["$ri"].velocities[i]
+AtomsBase.velocity(s::ReplicaSystem) = error("Replica index required.")
 
 AtomsBase.atomic_mass(s::ReplicaSystem, i::Integer) = mass(s.atoms[i])
 AtomsBase.atomic_symbol(s::ReplicaSystem, i::Integer) = Symbol(s.atoms_data[i].element)
@@ -86,6 +88,16 @@ AtomsBase.atomic_number(s::ReplicaSystem, i::Integer) = missing
 
 AtomsBase.boundary_conditions(::ReplicaSystem{3}) = SVector(Periodic(), Periodic(), Periodic())
 AtomsBase.boundary_conditions(::ReplicaSystem{2}) = SVector(Periodic(), Periodic())
+
+edges_to_box(bs::SVector{3}, z) = SVector{3}([
+    SVector(bs[1], z    , z    ),
+    SVector(z    , bs[2], z    ),
+    SVector(z    , z    , bs[3]),
+])
+edges_to_box(bs::SVector{2}, z) = SVector{2}([
+    SVector(bs[1], z    ),
+    SVector(z    , bs[2]),
+])
 
 function AtomsBase.bounding_box(s::ReplicaSystem)
     bs = s.box_size
