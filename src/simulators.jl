@@ -56,5 +56,5 @@ function TemperatureREMD(;
     end
     SD = typeof(simulators)
 
-    return TemperatureREMD{N, T, S, SD}(SA[temps...], indices, simulators, n_cycles, cycle_len)
+    return TemperatureREMD{N, T, S, SD}(temps, indices, simulators, n_cycles, cycle_len)
 end
