@@ -53,10 +53,10 @@ function ReplicaSystem(;
     C = typeof(coords)
     V = typeof(velocities)
 
-    replicas = Dict(["$i", IndividualReplica{C, V}(i, coords, velocities)] for i=1:n_replicas)
+    replicas = Dict([i, IndividualReplica{C, V}(i, coords, velocities)] for i=1:n_replicas)
     RS = typeof(replicas)
 
-    replica_loggers = Dict(["$i", copy(loggers)] for i=1:n_replicas)
+    replica_loggers = Dict([i, copy(loggers)] for i=1:n_replicas)
     L = typeof(replica_loggers)
 
     return ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, L, F, E}(
