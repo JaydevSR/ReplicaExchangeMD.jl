@@ -25,7 +25,7 @@ function TemperatureREMD(;
 
     if coupling_required && coupling ∈ [AndersenThermostat, BerendsenThermostat]
         couplings = [coupling(temps[i], kwargs[:coupling_const]) for i in indices]
-    elseif coupling ∈ [RescaleThermostat]
+    elseif coupling_required && coupling ∈ [RescaleThermostat]
         couplings = [coupling(temps[i]) for i in indices]
     else
         error("Temperature coupling required for TemperatureREMD using $(simulator) simulator.")
