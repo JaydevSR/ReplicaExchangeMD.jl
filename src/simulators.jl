@@ -9,48 +9,45 @@ end
 
 function TemperatureREMD(;
     simulator,
-    temps, n_cycles, cycle_len, dt,
-    remove_CM_motion=true, 
+    temps, n_cycles, cycle_len, dt, 
     kwargs...)
     S = simulator
     T = eltype(temps)
     N = length(temps)
     temps = SA[temps...]
-    indices = SA[[i for i=1:length(temps)]...]
+    indices = SA[collect(1:length(temps))...]
+
+    coupling_required = false
+    if simulator ∈ [VelocityVerlet, Verlet, StormerVerlet]
+        coupling_required = true
+        coupling = kwargs[:coupling]
+    end
+
+    if coupling_required && coupling ∈ [AndersenThermostat, BerendsenThermostat]
+        couplings = [coupling(temps[i], kwargs[:coupling_const]) for i in indices]
+    elseif coupling ∈ [RescaleThermostat]
+        couplings = [coupling(temps[i]) for i in indices]
+    else
+        error("Temperature coupling required for TemperatureREMD using $(simulator) simulator.")
+    end
 
     if simulator==Langevin
         simulators = Dict(
-            [i, simulator(dt=dt, temperature=temps[i], friction=kwargs[:friction], remove_CM_motion=remove_CM_motion)]
+            [i, simulator(dt=dt, temperature=temps[i], friction=kwargs[:friction],
+            remove_CM_motion=kwargs[:remove_CM_motion])]
             for i in indices
-            )
-    elseif simulator==VelocityVerlet || simulator==Verlet
-        if kwargs[:coupling] ∈ [AndersenThermostat, BerendsenThermostat]
-            coupling = kwargs[:coupling]
-            simulators = Dict(
-                [i, simulator(dt=dt, coupling=coupling(temps[i], kwargs[:coupling_const]), remove_CM_motion=remove_CM_motion)] for i in indices
-            )
-        elseif  kwargs[:coupling] ∈ [RescaleThermostat]
-            coupling = kwargs[:coupling]
-            simulators = Dict(
-                [i, simulator(dt=dt, coupling=coupling(temps[i]), remove_CM_motion=remove_CM_motion)] for i in indices
-            )
-        else
-            error("Temperature coupling required for TemperatureREMD.")
-        end
-    elseif simulator==StormerVerlet
-        if kwargs[:coupling] ∈ [AndersenThermostat, BerendsenThermostat]
-            coupling = kwargs[:coupling]
-            simulators = Dict(
-                [i, simulator(dt=dt, coupling=coupling(temps[i], kwargs[:coupling_const]))] for i in indices
-            )
-        elseif  kwargs[:coupling] ∈ [RescaleThermostat]
-            coupling = kwargs[:coupling]
-            simulators = Dict(
-                [i, simulator(dt=dt, coupling=coupling(temps[i]))] for i in indices
-            )
-        else
-            error("Temperature coupling required for TemperatureREMD.")
-        end
+        )
+    elseif simulator ∈ [VelocityVerlet, Verlet, StormerVerlet]
+        simulators = Dict(
+            [i, simulator(dt=dt, temperature=temps[i], coupling=couplings[i],
+            remove_CM_motion=kwargs[:remove_CM_motion])]
+            for i in indices
+        )
+    elseif simulator == StormerVerlet
+        simulators = Dict(
+            [i, simulator(dt=dt, temperature=temps[i], coupling=couplings[i])]
+            for i in indices
+        )
     else
         error("Simulator type $(simulator) not supported.")
     end
