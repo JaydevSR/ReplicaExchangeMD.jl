@@ -1,4 +1,4 @@
-module REMD
+module ReplicaExchangeMD
 
 using Reexport
 
