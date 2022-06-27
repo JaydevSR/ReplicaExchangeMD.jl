@@ -17,10 +17,12 @@ function TemperatureREMD(;
     ET = typeof(exchange_time)
     DT = typeof(dt)
     temps = SA[temps...]
-    
+    if length(simulators) != length(temps)
+        error("Number of simulators and temperatures values must be equal.")
+    end
     simulators = Dict([i, simulators[i]] for i in 1:N)
     SD = typeof(simulators)
-
+    
     return TemperatureREMD{N, T, S, SD, ET}(temps, simulators, exchange_time, dt)
 end
 
@@ -35,7 +37,6 @@ function simulate!(;
     if sys.n_replicas != length(sim.simulators)
         error("Number of replicas in ReplicaSystem and simulators in TemperatureREMD must match.")
     end
-
     # calculate n_cycles and n_steps_per_cycle from dt and exchange_time
     n_cycles = (n_steps * sim.dt) ÷ sim.exchange_time
     cycle_length = n_steps ÷ n_cycles
