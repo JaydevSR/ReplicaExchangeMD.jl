@@ -1,6 +1,6 @@
 export ReplicaSystem
 
-mutable struct ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, L, F, E} <: AbstractSystem{D}
+mutable struct ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, F, E} <: AbstractSystem{D}
     atoms::A
     atoms_data::AD
     pairwise_inters::PI
@@ -8,17 +8,10 @@ mutable struct ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, L, F, E} <: 
     general_inters::GI
     n_replicas::Integer
     replicas::RS
-    box_size::B
+    boundary::B
     neighbor_finder::NF
-    replica_loggers::L
     force_units::F
     energy_units::E
-end
-
-mutable struct IndividualReplica{C, V}
-    index::Int
-    coords::C
-    velocities::V
 end
 
 function ReplicaSystem(;
@@ -30,7 +23,7 @@ function ReplicaSystem(;
     coords,
     velocities=zero(coords) * u"ps^-1",
     n_replicas,
-    box_size,
+    boundary,
     neighbor_finder=NoNeighborFinder(),
     loggers=Dict(),
     force_units=u"kJ * mol^-1 * nm^-1",
@@ -46,23 +39,34 @@ function ReplicaSystem(;
     PI = typeof(pairwise_inters)
     SI = typeof(specific_inter_lists)
     GI = typeof(general_inters)
-    B = typeof(box_size)
+    B = typeof(boundary)
     NF = typeof(neighbor_finder)
     F = typeof(force_units)
     E = typeof(energy_units)
-    C = typeof(coords)
-    V = typeof(velocities)
 
-    replicas = Dict([i, IndividualReplica{C, V}(i, coords, velocities)] for i=1:n_replicas)
+    replicas = Dict(
+        [i, System(
+            atoms=atoms,
+            atoms_data=atoms_data,
+            pairwise_inters=pairwise_inters,
+            specific_inter_lists=specific_inter_lists,
+            general_inters=general_inters,
+            coords=coords,
+            velocities=velocities,
+            boundary=boundary,
+            neighbor_finder=[copy(neighbor_finder) for i in 1:n_replicas],
+            loggers=loggers,
+            force_units=force_units,
+            energy_units=energy_units,
+            gpu_diff_safe=gpu_diff_safe  
+        )] for i=1:n_replicas
+    )
     RS = typeof(replicas)
 
-    replica_loggers = Dict([i, copy(loggers)] for i=1:n_replicas)
-    L = typeof(replica_loggers)
-
-    return ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, L, F, E}(
+    return ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, F, E}(
             atoms, atoms_data, pairwise_inters, specific_inter_lists,
-            general_inters, n_replicas, replicas, box_size, neighbor_finder,
-            replica_loggers, force_units, energy_units)
+            general_inters, n_replicas, replicas, boundary, neighbor_finder,
+            force_units, energy_units)
 end
 
 is_gpu_diff_safe(::ReplicaSystem{D, G}) where {D, G} = G
@@ -100,7 +104,7 @@ edges_to_box(bs::SVector{2}, z) = SVector{2}([
 ])
 
 function AtomsBase.bounding_box(s::ReplicaSystem)
-    bs = s.box_size
+    bs = s.boundary.side_lengths
     z = zero(bs[1])
     bb = edges_to_box(bs, z)
     return unit(z) == NoUnits ? (bb)u"nm" : bb # Assume nm without other information
