@@ -1,12 +1,10 @@
 export TemperatureREMD
-struct TemperatureREMD{N, T, S, SD, ET, DT}
+struct TemperatureREMD{N, T, S, ST, ET, DT}
     temps::StaticVector{N, T}
-    simulators::SD
+    simulators::ST
     exchange_time::ET
     dt::DT
 end
-
-n_simulators(::TemperatureREMD{N}) where {N} = N 
 
 function TemperatureREMD(;
                 temps,
@@ -22,10 +20,10 @@ function TemperatureREMD(;
     if length(simulators) != length(temps)
         error("Number of simulators and temperatures values must be equal.")
     end
-    simulators = Dict([i, simulators[i]] for i in 1:N)
-    SD = typeof(simulators)
+    simulators = Tuple(simulators[i] for i in 1:N)
+    ST = typeof(simulators)
     
-    return TemperatureREMD{N, T, S, SD, ET, DT}(temps, simulators, exchange_time, dt)
+    return TemperatureREMD{N, T, S, ST, ET, DT}(temps, simulators, exchange_time, dt)
 end
 
 # simulate temperature replica exchange
