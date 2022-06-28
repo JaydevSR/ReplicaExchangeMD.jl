@@ -126,9 +126,9 @@ version = "0.7.16"
 
 [[deps.ChainRules]]
 deps = ["ChainRulesCore", "Compat", "IrrationalConstants", "LinearAlgebra", "Random", "RealDot", "SparseArrays", "Statistics"]
-git-tree-sha1 = "97fd0a3b7703948a847265156a41079730805c77"
+git-tree-sha1 = "238f4cb4d7d58ad876d51bae45922b3fb7db29ad"
 uuid = "082447d4-558c-5d27-93f4-14fc19e9eca2"
-version = "1.36.0"
+version = "1.36.1"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
@@ -554,11 +554,11 @@ uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [[deps.Molly]]
 deps = ["AtomsBase", "BioStructures", "CUDA", "CellListMap", "ChainRulesCore", "Chemfiles", "Colors", "Combinatorics", "DataStructures", "Distances", "Distributions", "EzXML", "ForwardDiff", "KernelDensity", "LinearAlgebra", "NearestNeighbors", "Random", "Reexport", "Requires", "SparseArrays", "StaticArrays", "Statistics", "Unitful", "UnitfulChainRules", "Zygote"]
-git-tree-sha1 = "96c362ca57a34baf6b03e928515fb6f150f73503"
+git-tree-sha1 = "7cac1b0cb3b45f7fcd65bb84f74d38180b1c9ee8"
 repo-rev = "master"
 repo-url = "https://github.com/JuliaMolSim/Molly.jl"
 uuid = "aa0f7f06-fcc0-5ec4-a7f3-a573f33f9c4c"
-version = "0.10.4"
+version = "0.11.0"
 
 [[deps.MozillaCACerts_jll]]
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
@@ -793,9 +793,9 @@ uuid = "90137ffa-7385-5640-81b9-e52037218182"
 version = "1.5.0"
 
 [[deps.StaticArraysCore]]
-git-tree-sha1 = "6edcea211d224fa551ec8a85debdc6d732f155dc"
+git-tree-sha1 = "66fe9eb253f910fe8cf161953880cfdaef01cdf0"
 uuid = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
-version = "1.0.0"
+version = "1.0.1"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]

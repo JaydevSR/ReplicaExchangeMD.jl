@@ -1,6 +1,7 @@
 export ReplicaSystem
 
-mutable struct ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, F, E} <: AbstractSystem{D}
+# A system to be simulated using replica exchage
+mutable struct ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, F, E, K} <: AbstractSystem{D}
     atoms::A
     atoms_data::AD
     pairwise_inters::PI
@@ -12,6 +13,7 @@ mutable struct ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, F, E} <: Abs
     neighbor_finder::NF
     force_units::F
     energy_units::E
+    k::K
 end
 
 function ReplicaSystem(;
@@ -25,48 +27,58 @@ function ReplicaSystem(;
     n_replicas,
     boundary,
     neighbor_finder=NoNeighborFinder(),
-    loggers=Dict(),
+    loggers=(),
     force_units=u"kJ * mol^-1 * nm^-1",
     energy_units=u"kJ * mol^-1",
+    k=Unitful.k,
     gpu_diff_safe=isa(coords, CuArray)
     )
 
-    D = length(box_size)
+    D = n_dimensions(boundary)
     G = gpu_diff_safe
-    T = typeof(ustrip(first(box_size)))
+    T = float_type(boundary)
     A = typeof(atoms)
     AD = typeof(atoms_data)
     PI = typeof(pairwise_inters)
     SI = typeof(specific_inter_lists)
     GI = typeof(general_inters)
+    C = typeof(coords)
+    V = typeof(velocities)
     B = typeof(boundary)
     NF = typeof(neighbor_finder)
+    L = typeof(loggers)
     F = typeof(force_units)
     E = typeof(energy_units)
 
-    replicas = Dict(
-        [i, System(
-            atoms=atoms,
-            atoms_data=atoms_data,
-            pairwise_inters=pairwise_inters,
-            specific_inter_lists=specific_inter_lists,
-            general_inters=general_inters,
-            coords=coords,
-            velocities=velocities,
-            boundary=boundary,
-            neighbor_finder=[copy(neighbor_finder) for i in 1:n_replicas],
-            loggers=loggers,
-            force_units=force_units,
-            energy_units=energy_units,
-            gpu_diff_safe=gpu_diff_safe  
-        )] for i=1:n_replicas
-    )
+    if energy_units == NoUnits
+        if unit(k) == NoUnits
+            # Use user-supplied unitless Boltzmann constant
+            k_converted = T(k)
+        else
+            # Otherwise assume energy units are (u* nm^2 * ps^-2)
+            k_converted = T(ustrip(u"u * nm^2 * ps^-2 * K^-1", k))
+        end
+    elseif dimension(energy_units) == u"𝐋^2 * 𝐌 * 𝐍^-1 * 𝐓^-2"
+        k_converted = T(uconvert(energy_units * u"mol * K^-1", k))
+    else
+        k_converted = T(uconvert(energy_units * u"K^-1", k))
+    end
+    
+    K = typeof(k_converted)
+
+    # FLAGS
+    # Copy of neighbor_finder to support CellListNeighborFinder which stores data 
+    replicas = Dict([i, System{D, G, T, A, AD, PI, SI, GI, C, V, B, NF, L, F, E, K}(
+            atoms, atoms_data, pairwise_inters, specific_inter_lists,
+            general_inters, copy(coords), copy(velocities), boundary, neighbor_finder,
+            copy(loggers), force_units, energy_units, k_converted)] for i=1:n_replicas)
+    
     RS = typeof(replicas)
 
-    return ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, F, E}(
+    return ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, F, E, K}(
             atoms, atoms_data, pairwise_inters, specific_inter_lists,
             general_inters, n_replicas, replicas, boundary, neighbor_finder,
-            force_units, energy_units)
+            force_units, energy_units, k_converted)
 end
 
 is_gpu_diff_safe(::ReplicaSystem{D, G}) where {D, G} = G
@@ -78,13 +90,11 @@ AtomsBase.species_type(s::ReplicaSystem) = eltype(s.atoms)
 Base.getindex(s::ReplicaSystem, i::Integer) = AtomView(s, i)
 Base.length(s::ReplicaSystem) = length(s.atoms)
 
-AtomsBase.position(s::ReplicaSystem, ri::Integer) = s.replicas["$ri"].coords
-AtomsBase.position(s::ReplicaSystem, ri::Integer, i::Integer) = s.replicas["$ri"].coords[i]
-AtomsBase.position(s::ReplicaSystem) = error("Replica index required.")
+AtomsBase.position(s::ReplicaSystem) = s.replicas[1].coords
+AtomsBase.position(s::ReplicaSystem, i::Integer) = s.replicas[1].coords[i]
 
-AtomsBase.velocity(s::ReplicaSystem, ri::Integer) = s.replicas["$ri"].velocities
-AtomsBase.velocity(s::ReplicaSystem, ri::Integer, i::Integer) = s.replicas["$ri"].velocities[i]
-AtomsBase.velocity(s::ReplicaSystem) = error("Replica index required.")
+AtomsBase.velocity(s::ReplicaSystem) = s.replicas[1].velocities
+AtomsBase.velocity(s::ReplicaSystem, i::Integer) = s.replicas[1].velocities[i]
 
 AtomsBase.atomic_mass(s::ReplicaSystem, i::Integer) = mass(s.atoms[i])
 AtomsBase.atomic_symbol(s::ReplicaSystem, i::Integer) = Symbol(s.atoms_data[i].element)
@@ -111,5 +121,5 @@ function AtomsBase.bounding_box(s::ReplicaSystem)
 end
 
 function Base.show(io::IO, s::ReplicaSystem)
-    print(io, "ReplicaSystem containing ",  s.n_replicas, " replicas with ", length(s), " atoms, box size ", s.box_size)
+    print(io, "ReplicaSystem containing ",  s.n_replicas, " replicas with ", length(s), " atoms, boundary ", s.boundary)
 end
