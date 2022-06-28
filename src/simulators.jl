@@ -77,4 +77,5 @@ function simulate!(sys::ReplicaSystem,
         end
     end
     @info "Number of exchanges: $n_exchanges"
+    return sys
 end
