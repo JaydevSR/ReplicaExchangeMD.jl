@@ -1,7 +1,8 @@
 export ReplicaSystem
 
 # A system to be simulated using replica exchage
-mutable struct ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, F, E, K} <: AbstractSystem{D}
+# TODO: Deal with loggers
+mutable struct ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, RL, F, E, K} <: AbstractSystem{D}
     atoms::A
     atoms_data::AD
     pairwise_inters::PI
@@ -11,32 +12,31 @@ mutable struct ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, F, E, K} <: 
     replicas::RS
     boundary::B
     neighbor_finder::NF
+    loggers::RL
     force_units::F
     energy_units::E
     k::K
 end
 
 function ReplicaSystem(;
-    atoms,
-    atoms_data=[],
-    pairwise_inters=(),
-    specific_inter_lists=(),
-    general_inters=(),
-    coords,
-    velocities=zero(coords) * u"ps^-1",
-    n_replicas,
-    boundary,
-    neighbor_finder=NoNeighborFinder(),
-    loggers=(),
-    force_units=u"kJ * mol^-1 * nm^-1",
-    energy_units=u"kJ * mol^-1",
-    k=Unitful.k,
-    gpu_diff_safe=isa(coords, CuArray)
-    )
-
+                atoms,
+                atoms_data=[],
+                pairwise_inters=(),
+                specific_inter_lists=(),
+                general_inters=(),
+                coords,
+                velocities=zero(coords) * u"ps^-1",
+                n_replicas,
+                boundary,
+                neighbor_finder=NoNeighborFinder(),
+                loggers=Tuple(() for i=1:n_replicas),
+                force_units=u"kJ * mol^-1 * nm^-1",
+                energy_units=u"kJ * mol^-1",
+                k=Unitful.k,
+                gpu_diff_safe=isa(coords, CuArray))
     D = n_dimensions(boundary)
     G = gpu_diff_safe
-    T = float_type(boundary)
+    T = Molly.float_type(boundary)
     A = typeof(atoms)
     AD = typeof(atoms_data)
     PI = typeof(pairwise_inters)
@@ -46,9 +46,10 @@ function ReplicaSystem(;
     V = typeof(velocities)
     B = typeof(boundary)
     NF = typeof(neighbor_finder)
-    L = typeof(loggers)
+    L = eltype(loggers)
     F = typeof(force_units)
     E = typeof(energy_units)
+    RL = typeof(loggers)
 
     if energy_units == NoUnits
         if unit(k) == NoUnits
@@ -66,19 +67,17 @@ function ReplicaSystem(;
     
     K = typeof(k_converted)
 
-    # FLAGS
-    # Copy of neighbor_finder to support CellListNeighborFinder which stores data 
-    replicas = Dict([i, System{D, G, T, A, AD, PI, SI, GI, C, V, B, NF, L, F, E, K}(
+    # TODO: Copy of neighbor_finder to support CellListNeighborFinder which is mutable
+    replicas = Tuple(System{D, G, T, A, AD, PI, SI, GI, C, V, B, NF, L, F, E, K}(
             atoms, atoms_data, pairwise_inters, specific_inter_lists,
             general_inters, copy(coords), copy(velocities), boundary, neighbor_finder,
-            copy(loggers), force_units, energy_units, k_converted)] for i=1:n_replicas)
-    
+            loggers[i], force_units, energy_units, k_converted) for i=1:n_replicas)
     RS = typeof(replicas)
 
-    return ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, F, E, K}(
+    return ReplicaSystem{D, G, T, A, AD, PI, SI, GI, RS, B, NF, RL, F, E, K}(
             atoms, atoms_data, pairwise_inters, specific_inter_lists,
             general_inters, n_replicas, replicas, boundary, neighbor_finder,
-            force_units, energy_units, k_converted)
+            loggers, force_units, energy_units, k_converted)
 end
 
 is_gpu_diff_safe(::ReplicaSystem{D, G}) where {D, G} = G
