@@ -47,6 +47,11 @@ function simulate!(sys::ReplicaSystem,
     remaining_steps = n_steps % n_cycles
     n_exchanges = 0
 
+    # scale to correct temperatures
+    for i in eachindex(sys.replicas)
+        sys.replicas[i].velocities .*= sqrt(sim.temps[i] / temperature(sys.replicas[i]))
+    end
+
     for cycle=1:n_cycles
         @sync for idx in eachindex(sim.simulators)
             Threads.@spawn Molly.simulate!(sys.replicas[idx], sim.simulators[idx], cycle_length; n_threads=thread_div[idx])
