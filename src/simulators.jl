@@ -37,7 +37,7 @@ function simulate!(sys::ReplicaSystem,
 
     if n_threads > sys.n_replicas
         thread_div = equal_parts(n_threads, sys.n_replicas)
-    else # 1 thread per replica
+    else # pass 1 thread per replica
         thread_div = equal_parts(sys.n_replicas, sys.n_replicas)
     end
 
@@ -52,19 +52,19 @@ function simulate!(sys::ReplicaSystem,
             Threads.@spawn Molly.simulate!(sys.replicas[idx], sim.simulators[idx], cycle_length; n_threads=thread_div[idx])
         end
 
-        #! Check replica exchage algorithm
         if cycle != n_cycles
             n = rand(1:sys.n_replicas)
             m = mod(n, sys.n_replicas) + 1
-            β_n, β_m = 1/sim.temps[n], 1/sim.temps[m]
+            k_b = sys.k
+            β_n, β_m = 1/(k_b*sim.temps[n]), 1/(k_b*sim.temps[m])
             V_n, V_m = potential_energy(sys.replicas[n]), potential_energy(sys.replicas[m])
             Δ = ustrip((β_m - β_n)*(V_n - V_m))
             if Δ <= 0 || rand() < exp(-Δ)
                 n_exchanges += 1
                 sys.replicas[n].coords, sys.replicas[m].coords = sys.replicas[m].coords, sys.replicas[n].coords
                 # scale velocities
-                sys.replicas[n].velocities *= sqrt(β_n/β_m)
-                sys.replicas[m].velocities *= sqrt(β_m/β_n)
+                sys.replicas[n].velocities .*= sqrt(β_n/β_m)
+                sys.replicas[m].velocities .*= sqrt(β_m/β_n)
             end
         end
     end
