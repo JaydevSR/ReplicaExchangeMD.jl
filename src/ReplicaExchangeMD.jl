@@ -10,5 +10,6 @@ using CUDA
 
 include("types.jl")
 include("simulators.jl")
+include("utils.jl")
 
 end # module

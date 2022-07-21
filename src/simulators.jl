@@ -29,25 +29,27 @@ end
 # simulate temperature replica exchange
 function simulate!(sys::ReplicaSystem,
                     sim::TemperatureREMD,
-                    n_steps::Integer;
-                    parallel::Bool=true)
+                    n_steps::Int;
+                    n_threads::Int=Threads.nthreads())
     if sys.n_replicas != length(sim.simulators)
         error("Number of replicas in ReplicaSystem and simulators in TemperatureREMD must match.")
     end
+
+    if n_threads > sys.n_replicas
+        thread_div = equal_parts(n_threads, sys.n_replicas)
+    else # 1 thread per replica
+        thread_div = equal_parts(sys.n_replicas, sys.n_replicas)
+    end
+
     # calculate n_cycles and n_steps_per_cycle from dt and exchange_time
     n_cycles = convert(Int64, (n_steps * sim.dt) ÷ sim.exchange_time)
     cycle_length = n_steps ÷ n_cycles
     remaining_steps = n_steps % n_cycles
     n_exchanges = 0
-    @info "Total number of cycles: $n_cycles (cycle length: $cycle_length, remaining steps: $remaining_steps)"
 
     for cycle=1:n_cycles
         @sync for idx in eachindex(sim.simulators)
-            if parallel
-                Threads.@spawn Molly.simulate!(sys.replicas[idx], sim.simulators[idx], cycle_length; parallel=parallel)
-            else
-                Molly.simulate!(sys.replicas[idx], sim.simulators[idx], cycle_length; parallel=parallel)
-            end
+            Threads.@spawn Molly.simulate!(sys.replicas[idx], sim.simulators[idx], cycle_length; n_threads=thread_div[idx])
         end
 
         #! Check replica exchage algorithm
@@ -55,7 +57,7 @@ function simulate!(sys::ReplicaSystem,
             n = rand(1:sys.n_replicas)
             m = mod(n, sys.n_replicas) + 1
             β_n, β_m = 1/sim.temps[n], 1/sim.temps[m]
-            V_n, V_m = potential_energy(sys.replicas[n]), potential_energy(sys.replicas[m])  # FLAG: not working
+            V_n, V_m = potential_energy(sys.replicas[n]), potential_energy(sys.replicas[m])
             Δ = ustrip((β_m - β_n)*(V_n - V_m))
             if Δ <= 0 || rand() < exp(-Δ)
                 n_exchanges += 1
@@ -66,16 +68,12 @@ function simulate!(sys::ReplicaSystem,
             end
         end
     end
+
     # run for remaining_steps (if >0) for all replicas
     if remaining_steps > 0
         @sync for idx in eachindex(sim.simulators)
-            if parallel
-                Threads.@spawn Molly.simulate!(sys.replicas[idx], sim.simulators[idx], remaining_steps; parallel=parallel)
-            else
-                Molly.simulate!(sys.replicas[idx], sim.simulators[idx], remaining_steps; parallel=parallel)
-            end
+            Threads.@spawn Molly.simulate!(sys.replicas[idx], sim.simulators[idx], remaining_steps; n_threads=thread_div[idx])
         end
     end
-    @info "Number of exchanges: $n_exchanges"
     return sys
 end
