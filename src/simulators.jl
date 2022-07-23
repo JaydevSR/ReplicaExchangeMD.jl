@@ -1,33 +1,48 @@
 export TemperatureREMD
-struct TemperatureREMD{N, T, S, ST, ET, DT}
-    temps::StaticVector{N, T}
+"""
+    TemperatureREMD(; <keyword arguments>)
+
+A simulator for a parallel temperature replica exchange (TREX) simulation on a [`ReplicaSystem`](@ref). More information on this algorithm can be found in [Sugita Y., Okamoto Y. 1999](https://doi.org/10.1016/S0009-2614(99)01123-9).
+The corresponding [`ReplicaSystem`](@ref) should have the same number of replicas as the number of temperatures in the simulator.
+
+arguments:
+- `dt::S`: the time step of the simulation.
+- `temperatures::TP`: the temperatures corresponding to the replicas.
+- `simulators::ST`: individual simulators for simulating each replica.
+- `exchange_time::ET`: the time interval between replica exchange attempt.
+"""
+struct TemperatureREMD{N, T, S, DT, TP, ST, ET}
+    dt::DT
+    temperatures::TP
     simulators::ST
     exchange_time::ET
-    dt::DT
 end
 
 function TemperatureREMD(;
-                temps,
+                dt,
+                temperatures,
                 simulators,
                 exchange_time,
-                dt, kwargs...)
+                kwargs...)
     S = eltype(simulators)
-    T = eltype(temps)
-    N = length(temps)
-    ET = typeof(exchange_time)
+    T = eltype(temperatures)
+    N = length(temperatures)
     DT = typeof(dt)
-    temps = SA[temps...]
-    if length(simulators) != length(temps)
-        error("Number of simulators and temperatures values must be equal.")
+    TP = typeof(temperatures)
+    ET = typeof(exchange_time)
+    if length(simulators) != length(temperatures)
+        throw(ArgumentError("Number of temperatures must match number of simulators"))
+    end
+    if exchange_time <= dt
+        throw(ArgumentError("Exchange time must be greater than the time step"))
     end
     simulators = Tuple(simulators[i] for i in 1:N)
     ST = typeof(simulators)
     
-    return TemperatureREMD{N, T, S, ST, ET, DT}(temps, simulators, exchange_time, dt)
+    return TemperatureREMD{N, T, S, DT, TP, ST, ET}(dt, temperatures, simulators, exchange_time)
 end
 
-# simulate temperature replica exchange
-function simulate!(sys::ReplicaSystem,
+function Molly.simulate!(sys::ReplicaSystem,
                     sim::TemperatureREMD,
                     n_steps::Int;
                     n_threads::Int=Threads.nthreads())
@@ -45,11 +60,10 @@ function simulate!(sys::ReplicaSystem,
     n_cycles = convert(Int64, (n_steps * sim.dt) ÷ sim.exchange_time)
     cycle_length = n_steps ÷ n_cycles
     remaining_steps = n_steps % n_cycles
-    n_exchanges = 0
 
     # scale to correct temperatures
     for i in eachindex(sys.replicas)
-        sys.replicas[i].velocities .*= sqrt(sim.temps[i] / temperature(sys.replicas[i]))
+        sys.replicas[i].velocities .*= sqrt(sim.temperatures[i] / temperature(sys.replicas[i]))
     end
 
     for cycle=1:n_cycles
@@ -61,17 +75,22 @@ function simulate!(sys::ReplicaSystem,
             n = rand(1:sys.n_replicas)
             m = mod(n, sys.n_replicas) + 1
             k_b = sys.k
-            β_n, β_m = 1/(k_b*sim.temps[n]), 1/(k_b*sim.temps[m])
+            β_n, β_m = 1/(k_b*sim.temperatures[n]), 1/(k_b*sim.temperatures[m])
             V_n, V_m = potential_energy(sys.replicas[n]), potential_energy(sys.replicas[m])
             Δ = ustrip((β_m - β_n)*(V_n - V_m))
             if Δ <= 0 || rand() < exp(-Δ)
-                n_exchanges += 1
                 sys.replicas[n].coords, sys.replicas[m].coords = sys.replicas[m].coords, sys.replicas[n].coords
                 # scale velocities
                 sys.replicas[n].velocities .*= sqrt(β_n/β_m)
                 sys.replicas[m].velocities .*= sqrt(β_m/β_n)
+                if !isnothing(sys.exchange_logger)
+                    Molly.log_property!(sys.exchange_logger, sys, cycle*cycle_length; indices=(n, m), delta=Δ, n_threads=n_threads)
+                end
             end
         end
+    end
+    if !isnothing(sys.exchange_logger)
+        finish_logs!(sys.exchange_logger)
     end
 
     # run for remaining_steps (if >0) for all replicas
