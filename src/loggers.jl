@@ -12,7 +12,8 @@ ReplicaExchangeLogger(n_replicas::Int) = ReplicaExchangeLogger(n_replicas, 0, Tu
 function Molly.log_property!(
                     rexl::ReplicaExchangeLogger,
                     sys::ReplicaSystem,
-                    step_n;
+                    neighbors=nothing,
+                    step_n::Int=0;
                     indices::Tuple{Int,Int},
                     delta::Float64,
                     n_threads=Threads.nthreads())
