@@ -65,7 +65,7 @@ function ReplicaSystem(;
                 specific_inter_lists=(),
                 general_inters=(),
                 coords,
-                velocities=nothing,
+                replica_velocities=nothing,
                 n_replicas,
                 boundary,
                 neighbor_finder=NoNeighborFinder(),
@@ -91,22 +91,26 @@ function ReplicaSystem(;
     E = typeof(energy_units)
     
 
-    if isnothing(velocities)
+    if isnothing(replica_velocities)
         if force_units == NoUnits
-            vels = zero(coords)
+            replica_velocities = [zero(coords) for _ in 1:n_replicas]
         else
-            vels = zero(coords) * u"ps^-1"
+            replica_velocities = [zero(coords) * u"ps^-1" for _ in 1:n_replicas]
         end
-    else
-        vels = velocities
     end
-    V = typeof(vels)
+    V = typeof(replica_velocities[1])
+    if !all(y -> typeof(y) == V, replica_velocities)
+        throw(ArgumentError("The velocities for all the replicas are not of the same type."))
+    end
 
+    if !all(y -> y==replica_velocities[1], replica_velocities)
+        throw(ArgumentError("Some replicas have different number of velocities."))
+    end
     if length(atoms) != length(coords)
         throw(ArgumentError("There are $(length(atoms)) atoms but $(length(coords)) coordinates"))
     end
-    if length(atoms) != length(vels)
-        throw(ArgumentError("There are $(length(atoms)) atoms but $(length(vels)) velocities"))
+    if length(atoms) != length(replica_velocities[1])
+        throw(ArgumentError("There are $(length(atoms)) atoms but $(length(replica_velocities[1])) velocities"))
     end
     if length(atoms_data) > 0 && length(atoms) != length(atoms_data)
         throw(ArgumentError("There are $(length(atoms)) atoms but $(length(atoms_data)) atom data entries"))
@@ -118,10 +122,15 @@ function ReplicaSystem(;
     if isa(coords, CuArray) && !isa(atoms, CuArray)
         throw(ArgumentError("The coordinates are on the GPU but the atoms are not"))
     end
-    if isa(atoms, CuArray) && !isa(vels, CuArray)
+
+    n_cuarray = sum(y -> isa(y, CuArray), replica_velocities)
+    if !(n_cuarray == n_replicas || n_cuarray == 0)
+        throw(ArgumentError("The velocities for $(n_cuarray) out of $(n_replicas) replicas are on GPU."))
+    end
+    if isa(atoms, CuArray) && n_cuarray != n_replicas
         throw(ArgumentError("The atoms are on the GPU but the velocities are not"))
     end
-    if isa(vels, CuArray) && !isa(atoms, CuArray)
+    if n_cuarray == n_replicas && !isa(atoms, CuArray)
         throw(ArgumentError("The velocities are on the GPU but the atoms are not"))
     end
 
@@ -150,7 +159,7 @@ function ReplicaSystem(;
 
     replicas = Tuple(System{D, G, T, CU, A, AD, PI, SI, GI, C, V, B, NF, typeof(replica_loggers[i]), F, E, K}(
             atoms, atoms_data, pairwise_inters, specific_inter_lists,
-            general_inters, copy(coords), copy(velocities), boundary, deepcopy(neighbor_finder),
+            general_inters, copy(coords), replica_velocities[i], boundary, deepcopy(neighbor_finder),
             replica_loggers[i], force_units, energy_units, k_converted) for i=1:n_replicas)
     RS = typeof(replicas)
 

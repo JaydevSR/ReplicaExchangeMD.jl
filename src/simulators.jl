@@ -42,12 +42,13 @@ function TemperatureREMD(;
     return TemperatureREMD{N, T, S, DT, TP, ST, ET}(dt, temperatures, simulators, exchange_time)
 end
 
-function Molly.simulate!(sys::ReplicaSystem,
+function simulate!(sys::ReplicaSystem,
                     sim::TemperatureREMD,
                     n_steps::Int;
+                    assign_velocities::Bool=false,
                     n_threads::Int=Threads.nthreads())
     if sys.n_replicas != length(sim.simulators)
-        error("Number of replicas in ReplicaSystem and simulators in TemperatureREMD must match.")
+        throw(ArgumentError("Number of replicas in ReplicaSystem and simulators in TemperatureREMD do not match."))
     end
 
     if n_threads > sys.n_replicas
@@ -61,9 +62,10 @@ function Molly.simulate!(sys::ReplicaSystem,
     cycle_length = n_steps ÷ n_cycles
     remaining_steps = n_steps % n_cycles
 
-    # scale to correct temperatures
-    for i in eachindex(sys.replicas)
-        sys.replicas[i].velocities .*= sqrt(sim.temperatures[i] / temperature(sys.replicas[i]))
+    if assign_velocities
+        for i in eachindex(sys.replicas)
+            random_velocities!(sys.replicas[i], sim.temperatures[i])
+        end
     end
 
     for cycle=1:n_cycles
