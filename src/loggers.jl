@@ -24,7 +24,5 @@ function Molly.log_property!(
 end
 
 function finish_logs!(rexl::ReplicaExchangeLogger, n_steps::Int)
-    if !isempty(rexl.indices)
-        rexl.end_step += n_steps
-    end
+    rexl.end_step += n_steps
 end
