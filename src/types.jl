@@ -137,20 +137,7 @@ function ReplicaSystem(;
         throw(ArgumentError("There are $(length(replica_loggers)) loggers but $(n_replicas) replicas"))
     end
 
-    if energy_units == NoUnits
-        if unit(k) == NoUnits
-            # Use user-supplied unitless Boltzmann constant
-            k_converted = T(k)
-        else
-            # Otherwise assume energy units are (u* nm^2 * ps^-2)
-            k_converted = T(ustrip(u"u * nm^2 * ps^-2 * K^-1", k))
-        end
-    elseif dimension(energy_units) == u"𝐋^2 * 𝐌 * 𝐍^-1 * 𝐓^-2"
-        k_converted = T(uconvert(energy_units * u"mol * K^-1", k))
-    else
-        k_converted = T(uconvert(energy_units * u"K^-1", k))
-    end
-    
+    k_converted = convert_k_units(k, energy_units)
     K = typeof(k_converted)
 
     exchange_logger = log_exchanges ? ReplicaExchangeLogger(n_replicas) : nothing
@@ -189,6 +176,23 @@ AtomsBase.atomic_number(s::ReplicaSystem, i::Integer) = missing
 
 AtomsBase.boundary_conditions(::ReplicaSystem{3}) = SVector(Periodic(), Periodic(), Periodic())
 AtomsBase.boundary_conditions(::ReplicaSystem{2}) = SVector(Periodic(), Periodic())
+
+function convert_k_units(k, energy_units)
+    if energy_units == NoUnits
+        if unit(k) == NoUnits
+            # Use user-supplied unitless Boltzmann constant
+            k_converted = T(k)
+        else
+            # Otherwise assume energy units are (u* nm^2 * ps^-2)
+            k_converted = T(ustrip(u"u * nm^2 * ps^-2 * K^-1", k))
+        end
+    elseif dimension(energy_units) == u"𝐋^2 * 𝐌 * 𝐍^-1 * 𝐓^-2"
+        k_converted = T(uconvert(energy_units * u"mol * K^-1", k))
+    else
+        k_converted = T(uconvert(energy_units * u"K^-1", k))
+    end
+    return k_converted
+end
 
 function AtomsBase.bounding_box(s::ReplicaSystem)
     bs = s.boundary.side_lengths

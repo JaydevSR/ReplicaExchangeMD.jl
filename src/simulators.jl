@@ -81,7 +81,7 @@ function simulate!(sys::ReplicaSystem,
             T_n, T_m = sim.temperatures[n], sim.temperatures[m]
             β_n, β_m = 1/(k_b*T_n), 1/(k_b*T_m)
             V_n, V_m = potential_energy(sys.replicas[n]), potential_energy(sys.replicas[m])
-            Δ = ustrip((β_m - β_n)*(V_n - V_m))
+            Δ = (β_m - β_n)*(V_n - V_m)
             if Δ <= 0 || rand(rng) < exp(-Δ)
                 sys.replicas[n].coords, sys.replicas[m].coords = sys.replicas[m].coords, sys.replicas[n].coords
                 # scale and exchange velocities
