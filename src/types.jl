@@ -42,7 +42,7 @@ Number of loggers in `replica_loggers` should be equal to `n_replicas`.
 - `gpu_diff_safe::Bool`: whether to use the code path suitable for the
     GPU and taking gradients. Defaults to `isa(coords, CuArray)`.
 """
-mutable struct ReplicaSystem{D, G, T, CU, A, AD, PI, SI, GI, RS, B, NF, EL, F, E, K} <: AbstractSystem{D}
+mutable struct ReplicaSystem{D, G, T, CU, A, AD, PI, SI, GI, RS, B, EL, F, E, K} <: AbstractSystem{D}
     atoms::A
     atoms_data::AD
     pairwise_inters::PI
@@ -51,7 +51,6 @@ mutable struct ReplicaSystem{D, G, T, CU, A, AD, PI, SI, GI, RS, B, NF, EL, F, E
     n_replicas::Integer
     replicas::RS
     boundary::B
-    neighbor_finder::NF
     exchange_logger::EL
     force_units::F
     energy_units::E
@@ -163,9 +162,9 @@ function ReplicaSystem(;
             replica_loggers[i], force_units, energy_units, k_converted) for i=1:n_replicas)
     RS = typeof(replicas)
 
-    return ReplicaSystem{D, G, T, CU, A, AD, PI, SI, GI, RS, B, NF, EL, F, E, K}(
+    return ReplicaSystem{D, G, T, CU, A, AD, PI, SI, GI, RS, B, EL, F, E, K}(
             atoms, atoms_data, pairwise_inters, specific_inter_lists,
-            general_inters, n_replicas, replicas, boundary, neighbor_finder, 
+            general_inters, n_replicas, replicas, boundary, 
             exchange_logger, force_units, energy_units, k_converted)
 end
 
