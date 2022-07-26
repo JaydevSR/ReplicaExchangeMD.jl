@@ -101,8 +101,11 @@ function ReplicaSystem(;
     if !all(y -> typeof(y) == V, replica_velocities)
         throw(ArgumentError("The velocities for all the replicas are not of the same type."))
     end
+    if length(replica_velocities) != n_replicas
+        throw(ArgumentError("There are $(length(replica_velocities)) velocities for replicas but $(n_replicas) replicas."))
+    end
 
-    if !all(y -> y==replica_velocities[1], replica_velocities)
+    if !all(y -> length(y)==length(replica_velocities[1]), replica_velocities)
         throw(ArgumentError("Some replicas have different number of velocities."))
     end
     if length(atoms) != length(coords)
@@ -137,7 +140,7 @@ function ReplicaSystem(;
         throw(ArgumentError("There are $(length(replica_loggers)) loggers but $(n_replicas) replicas"))
     end
 
-    k_converted = convert_k_units(k, energy_units)
+    k_converted = convert_k_units(k, energy_units, T)
     K = typeof(k_converted)
 
     exchange_logger = log_exchanges ? ReplicaExchangeLogger(n_replicas) : nothing
@@ -177,7 +180,7 @@ AtomsBase.atomic_number(s::ReplicaSystem, i::Integer) = missing
 AtomsBase.boundary_conditions(::ReplicaSystem{3}) = SVector(Periodic(), Periodic(), Periodic())
 AtomsBase.boundary_conditions(::ReplicaSystem{2}) = SVector(Periodic(), Periodic())
 
-function convert_k_units(k, energy_units)
+function convert_k_units(k, energy_units, T::Type)
     if energy_units == NoUnits
         if unit(k) == NoUnits
             # Use user-supplied unitless Boltzmann constant

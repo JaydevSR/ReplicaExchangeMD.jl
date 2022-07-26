@@ -60,12 +60,12 @@ function simulate!(sys::ReplicaSystem,
 
     # calculate n_cycles and n_steps_per_cycle from dt and exchange_time
     n_cycles = convert(Int64, (n_steps * sim.dt) ÷ sim.exchange_time)
-    cycle_length = n_steps ÷ n_cycles
-    remaining_steps = n_steps % n_cycles
+    cycle_length = (n_cycles > 0) ? n_steps ÷ n_cycles : 0
+    remaining_steps = (n_cycles > 0) ? n_steps % n_cycles : n_steps
 
     if assign_velocities
         for i in eachindex(sys.replicas)
-            random_velocities!(sys.replicas[i], sim.temperatures[i])
+            random_velocities!(sys.replicas[i], sim.temperatures[i]; rng=rng)
         end
     end
 
@@ -75,21 +75,24 @@ function simulate!(sys::ReplicaSystem,
         end
 
         if cycle != n_cycles
-            n = rand(1:sys.n_replicas)
-            m = mod(n, sys.n_replicas) + 1
-            k_b = sys.k
-            T_n, T_m = sim.temperatures[n], sim.temperatures[m]
-            β_n, β_m = 1/(k_b*T_n), 1/(k_b*T_m)
-            V_n, V_m = potential_energy(sys.replicas[n]), potential_energy(sys.replicas[m])
-            Δ = (β_m - β_n)*(V_n - V_m)
-            if Δ <= 0 || rand(rng) < exp(-Δ)
-                sys.replicas[n].coords, sys.replicas[m].coords = sys.replicas[m].coords, sys.replicas[n].coords
-                # scale and exchange velocities
-                vel_n = sys.replicas[n].velocities
-                vel_m = sys.replicas[m].velocities
-                sys.replicas[n].velocities, sys.replicas[m].velocities = sqrt(T_n/T_m)*vel_m, sqrt(T_m/T_n)*vel_n
-                if !isnothing(sys.exchange_logger)
-                    Molly.log_property!(sys.exchange_logger, sys, nothing, cycle*cycle_length; indices=(n, m), delta=Δ, n_threads=n_threads)
+            cycle_parity = cycle % 2
+            for n in 1+cycle_parity:2:sys.n_replicas-1
+                m = n + 1
+                k_b = sys.k
+                T_n, T_m = sim.temperatures[n], sim.temperatures[m]
+                β_n, β_m = 1/(k_b*T_n), 1/(k_b*T_m)
+                V_n, V_m = potential_energy(sys.replicas[n]), potential_energy(sys.replicas[m])
+                Δ = ustrip((β_m - β_n)*(V_n - V_m))
+                if Δ <= 0 || rand(rng) < exp(-Δ)
+                    # exchange coordinates and velocities
+                    sys.replicas[n].coords, sys.replicas[m].coords = sys.replicas[m].coords, sys.replicas[n].coords
+                    sys.replicas[n].velocities, sys.replicas[m].velocities = sys.replicas[m].velocities, sys.replicas[n].velocities
+                    # scale velocities
+                    sys.replicas[n].velocities .*= sqrt(T_n/T_m)
+                    sys.replicas[m].velocities .*= sqrt(T_m/T_n)
+                    if !isnothing(sys.exchange_logger)
+                        Molly.log_property!(sys.exchange_logger, sys, nothing, cycle*cycle_length; indices=(n, m), delta=Δ, n_threads=n_threads)
+                    end
                 end
             end
         end
