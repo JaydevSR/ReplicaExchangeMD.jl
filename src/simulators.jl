@@ -94,9 +94,6 @@ function simulate!(sys::ReplicaSystem,
             end
         end
     end
-    if !isnothing(sys.exchange_logger)
-        finish_logs!(sys.exchange_logger)
-    end
 
     # run for remaining_steps (if >0) for all replicas
     if remaining_steps > 0
@@ -104,5 +101,10 @@ function simulate!(sys::ReplicaSystem,
             Threads.@spawn Molly.simulate!(sys.replicas[idx], sim.simulators[idx], remaining_steps; n_threads=thread_div[idx])
         end
     end
+
+    if !isnothing(sys.exchange_logger)
+        finish_logs!(sys.exchange_logger, n_steps)
+    end
+
     return sys
 end
