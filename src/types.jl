@@ -68,7 +68,7 @@ function ReplicaSystem(;
                 n_replicas,
                 boundary,
                 neighbor_finder=NoNeighborFinder(),
-                log_exchanges::Bool=true,
+                exchange_logger=ReplicaExchangeLogger(n_replicas),
                 replica_loggers=Tuple(() for i=1:n_replicas),
                 force_units=u"kJ * mol^-1 * nm^-1",
                 energy_units=u"kJ * mol^-1",
@@ -86,6 +86,7 @@ function ReplicaSystem(;
     C = typeof(coords)
     B = typeof(boundary)
     NF = typeof(neighbor_finder)
+    EL = typeof(exchange_logger)
     F = typeof(force_units)
     E = typeof(energy_units)
     
@@ -142,9 +143,6 @@ function ReplicaSystem(;
 
     k_converted = convert_k_units(k, energy_units, T)
     K = typeof(k_converted)
-
-    exchange_logger = log_exchanges ? ReplicaExchangeLogger(n_replicas) : nothing
-    EL = typeof(exchange_logger)
 
     replicas = Tuple(System{D, G, T, CU, A, AD, PI, SI, GI, C, V, B, NF, typeof(replica_loggers[i]), F, E, K}(
             atoms, atoms_data, pairwise_inters, specific_inter_lists,
