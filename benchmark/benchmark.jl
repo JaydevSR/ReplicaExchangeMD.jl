@@ -59,7 +59,7 @@ repsys = ReplicaSystem(
     boundary=boundary,
     pairwise_inters=pairwise_inters,
     neighbor_finder=neighbor_finder,
-    log_exchanges=false,
+    exchange_logger=nothing,
 )
 
 repsim = TemperatureREMD(
@@ -80,8 +80,7 @@ repsim = TemperatureREMD(
 
 # Results
 
-# 81.149985 seconds (582.40 k allocations: 4.966 GiB, 0.73% gc time)
-# System with 1000 atoms, boundary CubicBoundary{Quantity{Float64, 𝐋 , Unitful.FreeUnits{(nm,), 𝐋 , nothing}}}(Quantity{Float64, 𝐋, Unitful.FreeUnits{(nm,), 𝐋, nothing}}  [5.0 nm, 5.0 nm, 5.0 nm])
-
-# 196.544874 seconds (1.55 M allocations: 20.401 GiB, 2.21% gc time)
-# ReplicaSystem containing 4 replicas with 1000 atoms, boundary CubicBoundary{Quantity{Float64, 𝐋 , Unitful.FreeUnits{(nm,), 𝐋, nothing}}}(Quantity{Float64, 𝐋, Unitful.FreeUnits{(nm,), 𝐋, nothing}}  [5.0 nm, 5.0 nm, 5.0 nm])
+# 6.426451 seconds (10.36 M allocations: 662.915 MiB, 9.63% gc time, 79.95% compilation time)
+# 77.253948 seconds (582.38 k allocations: 4.966 GiB, 0.87% gc time)
+# 10.209660 seconds (9.32 M allocations: 911.453 MiB, 3.83% gc time, 57.35% compilation time)
+# 173.750242 seconds (2.18 M allocations: 20.255 GiB, 2.47% gc time, 0.45% compilation time)
