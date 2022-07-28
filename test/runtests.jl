@@ -135,6 +135,6 @@ end
     @time simulate!(repsys, simulator, 10_000; assign_velocities=true, rng=rng);
     @time simulate!(repsys, simulator, 10_000; assign_velocities=false, rng=rng);
 
-    exchange_performance = repsys.exchange_logger.n_exchanges / repsys.exchange_logger.n_attempts
-    @test exchange_performance > 0.4
+    efficiency = repsys.exchange_logger.n_exchanges / repsys.exchange_logger.n_attempts
+    @test efficiency > 0.4
 end
