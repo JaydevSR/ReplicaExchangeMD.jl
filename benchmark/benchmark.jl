@@ -11,8 +11,6 @@ coords = place_atoms(n_atoms, boundary, 0.3u"nm");
 temp0 = 100.0u"K"
 velocities = [velocity(atom_mass, temp0) for i in 1:n_atoms];
 
-pairwise_inters = (LennardJones(),)
-
 nb_matrix = trues(n_atoms, n_atoms)
 for i in 1:(n_atoms ÷ 2)
     nb_matrix[i, i + (n_atoms ÷ 2)] = false
@@ -21,9 +19,11 @@ end
 
 neighbor_finder = DistanceNeighborFinder(
     nb_matrix=nb_matrix,
-    n_steps=10,
+    n_steps=5,
     dist_cutoff=1.5u"nm",
 )
+
+pairwise_inters = (LennardJones(nl_only=true),)
 
 ## Normal simulation on 2 threads
 

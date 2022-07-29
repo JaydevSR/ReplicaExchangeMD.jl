@@ -12,7 +12,7 @@ using Test
     atoms = [Atom(mass=atom_mass, σ=0.3u"nm", ϵ=0.2u"kJ * mol^-1") for i in 1:n_atoms]
     coords = place_atoms(n_atoms, boundary, 0.3u"nm")
     replica_velocities = nothing
-    pairwise_inters = (LennardJones(),)
+    pairwise_inters = (LennardJones(nl_only=true),)
     n_replicas = 4
 
     nb_matrix = trues(n_atoms, n_atoms)
@@ -90,7 +90,7 @@ end
     boundary = CubicBoundary(2.0u"nm", 2.0u"nm", 2.0u"nm")
     coords = place_atoms(n_atoms, boundary, 0.3u"nm")
 
-    pairwise_inters = (LennardJones(),)
+    pairwise_inters = (LennardJones(nl_only=true),)
 
     nb_matrix = trues(n_atoms, n_atoms)
     for i in 1:(n_atoms ÷ 2)
@@ -137,4 +137,6 @@ end
 
     efficiency = repsys.exchange_logger.n_exchanges / repsys.exchange_logger.n_attempts
     @test efficiency > 0.4
+
+    # TODO: test that the temperatures are correct
 end
