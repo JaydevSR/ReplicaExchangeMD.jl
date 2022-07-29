@@ -68,7 +68,7 @@ function ReplicaSystem(;
                 n_replicas,
                 boundary,
                 neighbor_finder=NoNeighborFinder(),
-                exchange_logger=ReplicaExchangeLogger(n_replicas),
+                exchange_logger=nothing,
                 replica_loggers=Tuple(() for i=1:n_replicas),
                 force_units=u"kJ * mol^-1 * nm^-1",
                 energy_units=u"kJ * mol^-1",
@@ -86,10 +86,13 @@ function ReplicaSystem(;
     C = typeof(coords)
     B = typeof(boundary)
     NF = typeof(neighbor_finder)
-    EL = typeof(exchange_logger)
     F = typeof(force_units)
     E = typeof(energy_units)
     
+    if isnothing(exchange_logger)
+        exchange_logger = ReplicaExchangeLogger{T}(n_replicas)
+    end
+    EL = typeof(exchange_logger)
 
     if isnothing(replica_velocities)
         if force_units == NoUnits
