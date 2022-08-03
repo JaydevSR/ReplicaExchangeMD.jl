@@ -8,7 +8,7 @@ mutable struct ReplicaExchangeLogger{T}
     end_step::Int
 end
 
-ReplicaExchangeLogger{T}(n_replicas::Int) = ReplicaExchangeLogger(n_replicas, 0, 0, Tuple{Int, Int}[], Int[], T[], 0)
+ReplicaExchangeLogger{T}(n_replicas::Int) where T = ReplicaExchangeLogger{T}(n_replicas, 0, 0, Tuple{Int, Int}[], Int[], T[], 0)
 
 function Molly.log_property!(
                     rexl::ReplicaExchangeLogger,
