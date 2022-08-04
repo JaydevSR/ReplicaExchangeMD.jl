@@ -136,7 +136,9 @@ end
     @time simulate!(repsys, simulator, 10_000; assign_velocities=false, rng=rng);
 
     efficiency = repsys.exchange_logger.n_exchanges / repsys.exchange_logger.n_attempts
-    @test efficiency > 0.4
+    @test 0.4 <= efficiency <= 0.6
 
-    # TODO: test that the temperatures are correct
+    for id in eachindex(repsys.replicas)
+        @test 0.95temp[id] < mean(ustrip.(values(repsys.replicas[id].loggers.temp))) < 1.05temp[id]
+    end
 end
