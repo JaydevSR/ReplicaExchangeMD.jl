@@ -90,7 +90,7 @@ function ReplicaSystem(;
     E = typeof(energy_units)
     
     if isnothing(exchange_logger)
-        exchange_logger = ReplicaExchangeLogger{T}(n_replicas)
+        exchange_logger = ReplicaExchangeLogger(n_replicas, T)
     end
     EL = typeof(exchange_logger)
 
