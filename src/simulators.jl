@@ -112,9 +112,9 @@ function simulate_remd!(sys::ReplicaSystem{D,G,T},
                         make_exchange!::Function;
                         rng=Random.GLOBAL_RNG,
                         n_threads::Int=Threads.nthreads()) where {D,G,T}
-    if sys.n_replicas != length(sim.simulators)
+    if sys.n_replicas != length(remd_sim.simulators)
         throw(ArgumentError("Number of replicas in ReplicaSystem ($(length(sys.n_replicas))) " *
-                "and simulators in TemperatureREMD ($(length(sim.simulators))) do not match."))
+                "and simulators in TemperatureREMD ($(length(remd_sim.simulators))) do not match."))
     end
 
     if n_threads > sys.n_replicas
@@ -130,8 +130,8 @@ function simulate_remd!(sys::ReplicaSystem{D,G,T},
     n_attempts = 0
 
     for cycle = 1:n_cycles
-        @sync for idx in eachindex(sim.simulators)
-            Threads.@spawn simulate!(sys.replicas[idx], sim.simulators[idx], remaining_steps;
+        @sync for idx in eachindex(remd_sim.simulators)
+            Threads.@spawn Molly.simulate!(sys.replicas[idx], remd_sim.simulators[idx], remaining_steps;
                                      n_threads=thread_div[idx])
                 end
 
@@ -142,15 +142,15 @@ function simulate_remd!(sys::ReplicaSystem{D,G,T},
             m = n + 1
             Δ, exchanged = make_exchange!(sys, remd_sim, n, m; rng=rng, n_threads=n_threads)
             if exchanged && !isnothing(sys.exchange_logger)
-                Molly.log_property!(sys.exchange_logger, sys, nothing, cycle * cycle_length;
+                log_property!(sys.exchange_logger, sys, nothing, cycle * cycle_length;
                                     indices=(n, m), delta=Δ, n_threads=n_threads)
             end
         end
     end
 
     if remaining_steps > 0
-        @sync for idx in eachindex(sim.simulators)
-            Threads.@spawn simulate!(sys.replicas[idx], sim.simulators[idx], remaining_steps;
+        @sync for idx in eachindex(remd_sim.simulators)
+            Threads.@spawn Molly.simulate!(sys.replicas[idx], remd_sim.simulators[idx], remaining_steps;
                                      n_threads=thread_div[idx])
         end
     end
