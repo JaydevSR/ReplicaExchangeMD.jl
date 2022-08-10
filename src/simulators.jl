@@ -1,14 +1,12 @@
 export TemperatureREMD
 
-abstract type REMD end
-
 function simulate_remd!(sys::ReplicaSystem{D,G,T},
-    sim::REMD,
+    remd_sim,
     n_steps::Int,
     make_exchange!::Function;
     rng=Random.GLOBAL_RNG,
     n_threads::Int=Threads.nthreads()) where {D,G,T}
-    if sys.n_replicas != length(sim.simulators)
+    if sys.n_replicas != length(remd_sim.simulators)
         throw(ArgumentError("Number of replicas in ReplicaSystem and simulators in the REMD simulator do not match."))
     end
 
@@ -19,21 +17,21 @@ function simulate_remd!(sys::ReplicaSystem{D,G,T},
     end
 
     # calculate n_cycles and n_steps_per_cycle from dt and exchange_time
-    n_cycles = convert(Int, (n_steps * sim.dt) ÷ sim.exchange_time)
+    n_cycles = convert(Int, (n_steps * remd_sim.dt) ÷ remd_sim.exchange_time)
     cycle_length = (n_cycles > 0) ? n_steps ÷ n_cycles : 0
     remaining_steps = (n_cycles > 0) ? n_steps % n_cycles : n_steps
     n_attempts = 0
 
     for cycle = 1:n_cycles
-        ThreadsX.foreach(eachindex(sys.replicas, sim.simulators, thread_div); basesize=1) do I
-            Molly.simulate!(sys.replicas[I], sim.simulators[I], cycle_length; n_threads=thread_div[I])
+        ThreadsX.foreach(eachindex(sys.replicas, remd_sim.simulators, thread_div); basesize=1) do I
+            Molly.simulate!(sys.replicas[I], remd_sim.simulators[I], cycle_length; n_threads=thread_div[I])
         end
 
         cycle_parity = cycle % 2
         for n in 1+cycle_parity:2:sys.n_replicas-1
             n_attempts += 1
             m = n + 1
-            Δ, exchanged = make_exchange!(sys, sim, n, m; rng=rng, n_threads=n_threads)
+            Δ, exchanged = make_exchange!(sys, remd_sim, n, m; rng=rng, n_threads=n_threads)
             if exchanged && !isnothing(sys.exchange_logger)
                 Molly.log_property!(sys.exchange_logger, sys, nothing, cycle * cycle_length; indices=(n, m), delta=Δ, n_threads=n_threads)
             end
@@ -42,8 +40,8 @@ function simulate_remd!(sys::ReplicaSystem{D,G,T},
 
     # run for remaining_steps (if >0) for all replicas
     if remaining_steps > 0
-        ThreadsX.foreach(eachindex(sys.replicas, sim.simulators, thread_div); basesize=1) do I
-            Molly.simulate!(sys.replicas[I], sim.simulators[I], cycle_length; n_threads=thread_div[I])
+        ThreadsX.foreach(eachindex(sys.replicas, remd_sim.simulators, thread_div); basesize=1) do I
+            Molly.simulate!(sys.replicas[I], remd_sim.simulators[I], cycle_length; n_threads=thread_div[I])
         end
     end
 
