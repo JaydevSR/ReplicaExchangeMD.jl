@@ -1,41 +1,8 @@
-export
-    REMD,
-    TemperatureREMD
+export TemperatureREMD
 
-struct REMD{N,T,S,DT,RC,ST,ET}
-    dt::DT
-    lambdas::RC
-    simulators::ST
-    exchange_time::ET
-end
+abstract type REMD end
 
-function REMD(;
-    dt,
-    lambdas,
-    simulators,
-    exchange_time,
-    kwargs...)
-    S = eltype(simulators)
-    T = eltype(lambdas)
-    N = length(lambdas)
-    DT = typeof(dt)
-    RC = typeof(lambdas)
-    ET = typeof(exchange_time)
-    if length(simulators) != length(lambdas)
-        throw(ArgumentError("Number of values of the reaction coordinate must match the number of simulators"))
-    end
-    if exchange_time <= dt
-        throw(ArgumentError("Exchange time must be greater than the time step"))
-    end
-    simulators = Tuple(simulators[i] for i in 1:N)
-    ST = typeof(simulators)
-
-    return TemperatureREMD{N,T,S,DT,RC,ST,ET}(dt, lambdas, simulators, exchange_time)
-end
-
-reaction_coordinates(sim::REMD) = sim.lambdas
-
-function simulate!(sys::ReplicaSystem{D,G,T},
+function simulate_remd!(sys::ReplicaSystem{D,G,T},
     sim::REMD,
     n_steps::Int,
     make_exchange!::Function;
@@ -58,7 +25,7 @@ function simulate!(sys::ReplicaSystem{D,G,T},
     n_attempts = 0
 
     for cycle = 1:n_cycles
-        ThreadsX.foreach(eachindex(sys.replicas, sim.simulators, thread_div)) do I
+        ThreadsX.foreach(eachindex(sys.replicas, sim.simulators, thread_div); basesize=1) do I
             Molly.simulate!(sys.replicas[I], sim.simulators[I], cycle_length; n_threads=thread_div[I])
         end
 
@@ -66,7 +33,7 @@ function simulate!(sys::ReplicaSystem{D,G,T},
         for n in 1+cycle_parity:2:sys.n_replicas-1
             n_attempts += 1
             m = n + 1
-            Δ, exchanged = make_exchange!(sys, reaction_coordinates(sim), n, m)
+            Δ, exchanged = make_exchange!(sys, sim, n, m; rng=rng, n_threads=n_threads)
             if exchanged && !isnothing(sys.exchange_logger)
                 Molly.log_property!(sys.exchange_logger, sys, nothing, cycle * cycle_length; indices=(n, m), delta=Δ, n_threads=n_threads)
             end
@@ -75,7 +42,7 @@ function simulate!(sys::ReplicaSystem{D,G,T},
 
     # run for remaining_steps (if >0) for all replicas
     if remaining_steps > 0
-        ThreadsX.foreach(eachindex(sys.replicas, sim.simulators, thread_div)) do I
+        ThreadsX.foreach(eachindex(sys.replicas, sim.simulators, thread_div); basesize=1) do I
             Molly.simulate!(sys.replicas[I], sim.simulators[I], cycle_length; n_threads=thread_div[I])
         end
     end
@@ -86,8 +53,6 @@ function simulate!(sys::ReplicaSystem{D,G,T},
 
     return sys
 end
-
-
 
 """
     TemperatureREMD(; <keyword arguments>)
@@ -101,9 +66,9 @@ arguments:
 - `simulators::ST`: individual simulators for simulating each replica.
 - `exchange_time::ET`: the time interval between replica exchange attempt.
 """
-struct TemperatureREMD{N,T,S,DT,TP,ST,ET} <: REMD{N,T,S,DT,TP,ST,ET}
+struct TemperatureREMD{N,T,S,DT,RC,ST,ET} <: REMD
     dt::DT
-    temperatures::TP
+    temperatures::RC
     simulators::ST
     exchange_time::ET
 end
@@ -118,7 +83,7 @@ function TemperatureREMD(;
     T = eltype(temperatures)
     N = length(temperatures)
     DT = typeof(dt)
-    TP = typeof(temperatures)
+    RC = typeof(temperatures)
     ET = typeof(exchange_time)
     if length(simulators) != length(temperatures)
         throw(ArgumentError("Number of temperatures must match number of simulators"))
@@ -129,10 +94,8 @@ function TemperatureREMD(;
     simulators = Tuple(simulators[i] for i in 1:N)
     ST = typeof(simulators)
 
-    return TemperatureREMD{N,T,S,DT,TP,ST,ET}(dt, temperatures, simulators, exchange_time)
+    return TemperatureREMD{N,T,S,DT,RC,ST,ET}(dt, temperatures, simulators, exchange_time)
 end
-
-reaction_coordinates(sim::TemperatureREMD) = sim.temperatures
 
 function simulate!(sys::ReplicaSystem{D,G,T},
     sim::TemperatureREMD,
@@ -146,20 +109,27 @@ function simulate!(sys::ReplicaSystem{D,G,T},
 
     if assign_velocities
         for i in eachindex(sys.replicas)
-            random_velocities!(sys.replicas[i], reaction_coordinates(sim)[i]; rng=rng)
+            random_velocities!(sys.replicas[i], sim.temperatures[i]; rng=rng)
         end
     end
 
-    simulate!(sys, sim, n_steps, tremd_exchange!; rng=rng, n_threads=n_threads)
+    simulate_remd!(sys, sim, n_steps, tremd_exchange!; rng=rng, n_threads=n_threads)
 end
 
-function tremd_exchange!(sys::ReplicaSystem{T}, temperatures::Vector{T}, n::Integer, m::Integer) where {T}
+function tremd_exchange!(
+    sys::ReplicaSystem{D,G,T},
+    sim::TemperatureREMD,
+    n::Integer,
+    m::Integer;
+    n_threads::Int=Threads.nthreads(),
+    rng=Random.GLOBAL_RNG) where {D,G,T}
+
     if dimension(sys.energy_units) == u"𝐋^2 * 𝐌 * 𝐍^-1 * 𝐓^-2"
         k_b = sys.k * T(Unitful.Na)
     else
         k_b = sys.k
     end
-    T_n, T_m = temperatures[n], temperatures[m]
+    T_n, T_m = sim.temperatures[n], sim.temperatures[m]
     β_n, β_m = 1 / (k_b * T_n), 1 / (k_b * T_m)
     neighbors_n = find_neighbors(sys.replicas[n], sys.replicas[n].neighbor_finder; n_threads=n_threads)
     neighbors_m = find_neighbors(sys.replicas[m], sys.replicas[m].neighbor_finder; n_threads=n_threads)
