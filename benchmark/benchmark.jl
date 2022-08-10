@@ -12,9 +12,9 @@ temp0 = 100.0u"K"
 velocities = [velocity(atom_mass, temp0) for i in 1:n_atoms];
 
 nb_matrix = trues(n_atoms, n_atoms)
-for i in 1:(n_atoms ÷ 2)
-    nb_matrix[i, i + (n_atoms ÷ 2)] = false
-    nb_matrix[i + (n_atoms ÷ 2), i] = false
+for i in 1:(n_atoms÷2)
+    nb_matrix[i, i+(n_atoms÷2)] = false
+    nb_matrix[i+(n_atoms÷2), i] = false
 end
 
 neighbor_finder = DistanceNeighborFinder(
@@ -44,7 +44,7 @@ sim0 = Langevin(
 
 @time Molly.simulate!(sys, sim0, 100, n_threads=2)
 @btime Molly.simulate!($sys, $sim0, 100, n_threads=2)
-@time Molly.simulate!(sys, sim0, 1_000; n_threads=2)
+@time Molly.simulate!(sys, sim0, 2_000; n_threads=2)
 
 # Replica exchange simulation with 4 replicas on 8 threads
 
@@ -78,4 +78,4 @@ repsim = TemperatureREMD(
 
 @time simulate!(repsys, repsim, 1_00; n_threads=8)
 @btime simulate!($repsys, $repsim, 1_00; n_threads=8)
-@time simulate!(repsys, repsim, 1_000; n_threads=8)
+@time simulate!(repsys, repsim, 2_000; n_threads=8)

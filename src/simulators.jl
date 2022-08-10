@@ -11,7 +11,7 @@ arguments:
 - `simulators::ST`: individual simulators for simulating each replica.
 - `exchange_time::ET`: the time interval between replica exchange attempt.
 """
-struct TemperatureREMD{N, T, S, DT, TP, ST, ET}
+struct TemperatureREMD{N,T,S,DT,TP,ST,ET}
     dt::DT
     temperatures::TP
     simulators::ST
@@ -19,11 +19,11 @@ struct TemperatureREMD{N, T, S, DT, TP, ST, ET}
 end
 
 function TemperatureREMD(;
-                dt,
-                temperatures,
-                simulators,
-                exchange_time,
-                kwargs...)
+    dt,
+    temperatures,
+    simulators,
+    exchange_time,
+    kwargs...)
     S = eltype(simulators)
     T = eltype(temperatures)
     N = length(temperatures)
@@ -38,16 +38,16 @@ function TemperatureREMD(;
     end
     simulators = Tuple(simulators[i] for i in 1:N)
     ST = typeof(simulators)
-    
-    return TemperatureREMD{N, T, S, DT, TP, ST, ET}(dt, temperatures, simulators, exchange_time)
+
+    return TemperatureREMD{N,T,S,DT,TP,ST,ET}(dt, temperatures, simulators, exchange_time)
 end
 
-function simulate!(sys::ReplicaSystem{D, G, T},
-                    sim::TemperatureREMD,
-                    n_steps::Int;
-                    assign_velocities::Bool=false,
-                    rng=Random.GLOBAL_RNG,
-                    n_threads::Int=Threads.nthreads()) where {D, G, T}
+function simulate!(sys::ReplicaSystem{D,G,T},
+    sim::TemperatureREMD,
+    n_steps::Int;
+    assign_velocities::Bool=false,
+    rng=Random.GLOBAL_RNG,
+    n_threads::Int=Threads.nthreads()) where {D,G,T}
     if sys.n_replicas != length(sim.simulators)
         throw(ArgumentError("Number of replicas in ReplicaSystem and simulators in TemperatureREMD do not match."))
     end
@@ -70,9 +70,9 @@ function simulate!(sys::ReplicaSystem{D, G, T},
         end
     end
 
-    for cycle=1:n_cycles
-        @sync for idx in eachindex(sim.simulators)
-            Threads.@spawn Molly.simulate!(sys.replicas[idx], sim.simulators[idx], cycle_length; n_threads=thread_div[idx])
+    for cycle = 1:n_cycles
+        ThreadsX.foreach(eachindex(sys.replicas, sim.simulators, thread_div)) do I
+            Molly.simulate!(sys.replicas[I], sim.simulators[I], cycle_length; n_threads=thread_div[I])
         end
 
         cycle_parity = cycle % 2
@@ -85,20 +85,20 @@ function simulate!(sys::ReplicaSystem{D, G, T},
                 k_b = sys.k
             end
             T_n, T_m = sim.temperatures[n], sim.temperatures[m]
-            β_n, β_m = 1/(k_b*T_n), 1/(k_b*T_m)
+            β_n, β_m = 1 / (k_b * T_n), 1 / (k_b * T_m)
             neighbors_n = find_neighbors(sys.replicas[n], sys.replicas[n].neighbor_finder; n_threads=n_threads)
             neighbors_m = find_neighbors(sys.replicas[m], sys.replicas[m].neighbor_finder; n_threads=n_threads)
             V_n, V_m = potential_energy(sys.replicas[n], neighbors_n), potential_energy(sys.replicas[m], neighbors_m)
-            Δ = (β_m - β_n)*(V_n - V_m)
+            Δ = (β_m - β_n) * (V_n - V_m)
             if Δ <= 0 || rand(rng) < exp(-Δ)
                 # exchange coordinates and velocities
                 sys.replicas[n].coords, sys.replicas[m].coords = sys.replicas[m].coords, sys.replicas[n].coords
                 sys.replicas[n].velocities, sys.replicas[m].velocities = sys.replicas[m].velocities, sys.replicas[n].velocities
                 # scale velocities
-                sys.replicas[n].velocities .*= sqrt(T_n/T_m)
-                sys.replicas[m].velocities .*= sqrt(T_m/T_n)
+                sys.replicas[n].velocities .*= sqrt(T_n / T_m)
+                sys.replicas[m].velocities .*= sqrt(T_m / T_n)
                 if !isnothing(sys.exchange_logger)
-                    Molly.log_property!(sys.exchange_logger, sys, nothing, cycle*cycle_length; indices=(n, m), delta=Δ, n_threads=n_threads)
+                    Molly.log_property!(sys.exchange_logger, sys, nothing, cycle * cycle_length; indices=(n, m), delta=Δ, n_threads=n_threads)
                 end
             end
         end
@@ -106,8 +106,8 @@ function simulate!(sys::ReplicaSystem{D, G, T},
 
     # run for remaining_steps (if >0) for all replicas
     if remaining_steps > 0
-        @sync for idx in eachindex(sim.simulators)
-            Threads.@spawn Molly.simulate!(sys.replicas[idx], sim.simulators[idx], remaining_steps; n_threads=thread_div[idx])
+        ThreadsX.foreach(eachindex(sys.replicas, sim.simulators, thread_div)) do I
+            Molly.simulate!(sys.replicas[I], sim.simulators[I], cycle_length; n_threads=thread_div[I])
         end
     end
 

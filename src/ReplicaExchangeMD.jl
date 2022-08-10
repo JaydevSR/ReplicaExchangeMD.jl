@@ -7,6 +7,7 @@ using Reexport
 using Random
 using LinearAlgebra
 using CUDA
+using ThreadsX
 
 include("types.jl")
 include("simulators.jl")
