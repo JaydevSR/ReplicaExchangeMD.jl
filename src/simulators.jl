@@ -69,7 +69,7 @@ function simulate!(sys::ReplicaSystem{D, G, T},
     end
 
     simulate_remd!(sys, sim, n_steps, tremd_exchange!; rng=rng, n_threads=n_threads)
-        end
+end
 
 function tremd_exchange!(sys::ReplicaSystem{D,G,T},
                         sim::TemperatureREMD,
@@ -101,6 +101,75 @@ function tremd_exchange!(sys::ReplicaSystem{D,G,T},
         # scale velocities
         sys.replicas[n].velocities .*= sqrt(T_n / T_m)
         sys.replicas[m].velocities .*= sqrt(T_m / T_n)
+    end
+
+    return Δ, should_exchange
+end
+
+struct HamiltonianREMD{DT, T, S, ET}
+    dt::DT
+    temperature::T
+    simulator::S
+    exchange_time::ET
+end
+
+function HamiltonianREMD(;
+                         dt,
+                         temperature,
+                         simulator,
+                         exchange_time)
+
+    if exchange_time <= dt
+        throw(ArgumentError("Exchange time ($exchange_time) must be greater than the time step ($dt)"))
+    end
+    
+    return HamiltonianREMD(dt, temperature, simulator, exchange_time)
+end
+
+function simulate!(sys::ReplicaSystem{D, G, T},
+                    sim::HamiltonianREMD,
+                    n_steps::Integer;
+                    rng=Random.GLOBAL_RNG,
+                    n_threads::Integer=Threads.nthreads()) where {D, G, T}
+    simulate_remd!(sys, sim, n_steps, hremd_exchange!; rng=rng, n_threads=n_threads)
+end
+
+function hremd_exchange!(sys::ReplicaSystem{D,G,T},
+                        sim::HamiltonianREMD,
+                        n::Integer,
+                        m::Integer;
+                        n_threads::Int=Threads.nthreads(),
+                        rng=Random.GLOBAL_RNG) where {D,G,T}
+    if dimension(sys.energy_units) == u"𝐋^2 * 𝐌 * 𝐍^-1 * 𝐓^-2"
+        k_b = sys.k * T(Unitful.Na)
+    else
+        k_b = sys.k
+    end
+
+    T_n, T_m = temperature(sys.replicas[n]), temperature(sys.replicas[m])
+    β_n, β_m = inv(k_b * T_n), inv(k_b * T_m)
+    neighbors_n = find_neighbors(sys.replicas[n], sys.replicas[n].neighbor_finder;
+                                    n_threads=n_threads)
+    neighbors_m = find_neighbors(sys.replicas[m], sys.replicas[m].neighbor_finder;
+                                    n_threads=n_threads)
+    V_n_i = potential_energy(sys.replicas[n], neighbors_n)
+    V_m_i = potential_energy(sys.replicas[m], neighbors_m)
+
+    sys.replicas[n].coords, sys.replicas[m].coords = sys.replicas[m].coords, sys.replicas[n].coords
+    V_n_f = potential_energy(sys.replicas[n], neighbors_m) # use already calculated neighbors
+    V_m_f = potential_energy(sys.replicas[m], neighbors_n)
+
+    Δ = (β_m - β_n) * ((V_n_f - V_n_i) + (V_m_f - V_m_i))
+    should_exchange = Δ <= 0 || rand(rng) < exp(-Δ)
+
+    if should_exchange
+        # exchange velocities
+        sys.replicas[n].velocities, sys.replicas[m].velocities = sys.replicas[m].velocities, sys.replicas[n].velocities
+        # scale velocities
+        sys.replicas[n].velocities .*= sqrt(T_n / T_m)
+        sys.replicas[m].velocities .*= sqrt(T_m / T_n)
+    else # revert coordinate exchange
+        sys.replicas[n].coords, sys.replicas[m].coords = sys.replicas[m].coords, sys.replicas[n].coords
     end
 
     return Δ, should_exchange
@@ -168,4 +237,13 @@ end
     nrem = n % k
     n_parts = ntuple(i -> (i <= nrem) ? ndiv+1 : ndiv, k)
     return n_parts
+end
+
+function inverse_temperature(sys::System)
+    if dimension(sys.energy_units) == u"𝐋^2 * 𝐌 * 𝐍^-1 * 𝐓^-2"
+        k_b = sys.k * T(Unitful.Na)
+    else
+        k_b = sys.k
+    end
+    return inv(k_b * temperature(sys))
 end
