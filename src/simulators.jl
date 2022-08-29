@@ -1,9 +1,10 @@
 export TemperatureREMD, HamiltonianREMD
 
+
 """
     TemperatureREMD(; <keyword arguments>)
 
-A simulator for a parallel temperature replica exchange (TREX) simulation on a
+A simulator for a parallel temperature replica exchange MD (T-REMD) simulation on a
 [`ReplicaSystem`](@ref).
 See [Sugita and Okamoto 1999](https://doi.org/10.1016/S0009-2614(99)01123-9).
 The corresponding [`ReplicaSystem`](@ref) should have the same number of replicas as
@@ -18,7 +19,7 @@ Not currently compatible with automatic differentiation using Zygote.
 - `simulators::ST`: individual simulators for simulating each replica.
 - `exchange_time::ET`: the time interval between replica exchange attempts.
 """
-struct TemperatureREMD{N, T, S, DT, TP, ST, ET}
+struct TemperatureREMD{N, T, DT, TP, ST, ET}
     dt::DT
     temperatures::TP
     simulators::ST
@@ -30,7 +31,6 @@ function TemperatureREMD(;
                          temperatures,
                          simulators,
                          exchange_time)
-    S = eltype(simulators)
     T = eltype(temperatures)
     N = length(temperatures)
     DT = typeof(dt)
@@ -48,7 +48,7 @@ function TemperatureREMD(;
     simulators = Tuple(simulators[i] for i in 1:N)
     ST = typeof(simulators)
     
-    return TemperatureREMD{N, T, S, DT, TP, ST, ET}(dt, temperatures, simulators, exchange_time)
+    return TemperatureREMD{N, T, DT, TP, ST, ET}(dt, temperatures, simulators, exchange_time)
 end
 
 function simulate!(sys::ReplicaSystem{D, G, T},
@@ -69,14 +69,14 @@ function simulate!(sys::ReplicaSystem{D, G, T},
     end
 
     simulate_remd!(sys, sim, n_steps, tremd_exchange!; rng=rng, n_threads=n_threads)
-end
+        end
 
-function tremd_exchange!(sys::ReplicaSystem{D,G,T},
+function tremd_exchange!(sys::ReplicaSystem{D, G, T},
                         sim::TemperatureREMD,
                         n::Integer,
                         m::Integer;
                         n_threads::Int=Threads.nthreads(),
-                        rng=Random.GLOBAL_RNG) where {D,G,T}
+                        rng=Random.GLOBAL_RNG) where {D, G, T}
     if dimension(sys.energy_units) == u"𝐋^2 * 𝐌 * 𝐍^-1 * 𝐓^-2"
         k_b = sys.k * T(Unitful.Na)
     else
@@ -111,6 +111,8 @@ end
 
 A simulator for a parallel Hamiltonian replica exchange MD (H-REMD) simulation on a
 [`ReplicaSystem`](@ref). The corresponding replicas are expected to have the different Hamiltonians (due to different interactions or force fields).
+When calling [`simulate!`](@ref), the `assign_velocities` keyword argument determines
+whether to assign random velocities at the appropriate temperature for each replica.
 Not currently compatible with automatic differentiation using Zygote.
 
 # Arguments
@@ -119,7 +121,7 @@ Not currently compatible with automatic differentiation using Zygote.
 - `simulators::ST`: individual simulators for simulating each replica.
 - `exchange_time::ET`: the time interval between replica exchange attempts.
 """
-struct HamiltonianREMD{DT, T, ST, ET}
+struct HamiltonianREMD{N, T, DT, ST, ET}
     dt::DT
     temperature::T
     simulators::ST
@@ -131,28 +133,45 @@ function HamiltonianREMD(;
                          temperature,
                          simulators,
                          exchange_time)
+    N = length(simulators)
+    DT = typeof(dt)
+    T = typeof(temperature)
+    ST = typeof(simulators)
+    ET = typeof(exchange_time)
 
     if exchange_time <= dt
         throw(ArgumentError("Exchange time ($exchange_time) must be greater than the time step ($dt)"))
     end
     
-    return HamiltonianREMD(dt, temperature, simulators, exchange_time)
+    return HamiltonianREMD{N, T, DT, ST, ET}(dt, temperature, simulators, exchange_time)
 end
 
 function simulate!(sys::ReplicaSystem{D, G, T},
                     sim::HamiltonianREMD,
                     n_steps::Integer;
+                    assign_velocities::Bool=false,
                     rng=Random.GLOBAL_RNG,
                     n_threads::Integer=Threads.nthreads()) where {D, G, T}
+    if sys.n_replicas != length(sim.simulators)
+        throw(ArgumentError("Number of replicas in ReplicaSystem ($(length(sys.n_replicas))) " *
+                "and simulators in HamiltonianREMD ($(length(sim.simulators))) do not match."))
+    end
+
+    if assign_velocities
+        for i in eachindex(sys.replicas)
+            random_velocities!(sys.replicas[i], sim.temperature; rng=rng)
+        end
+    end
+    
     simulate_remd!(sys, sim, n_steps, hremd_exchange!; rng=rng, n_threads=n_threads)
 end
 
-function hremd_exchange!(sys::ReplicaSystem{D,G,T},
+function hremd_exchange!(sys::ReplicaSystem{D, G, T},
                         sim::HamiltonianREMD,
                         n::Integer,
                         m::Integer;
                         n_threads::Int=Threads.nthreads(),
-                        rng=Random.GLOBAL_RNG) where {D,G,T}
+                        rng=Random.GLOBAL_RNG) where {D, G, T}
     if dimension(sys.energy_units) == u"𝐋^2 * 𝐌 * 𝐍^-1 * 𝐓^-2"
         k_b = sys.k * T(Unitful.Na)
     else
@@ -169,14 +188,13 @@ function hremd_exchange!(sys::ReplicaSystem{D,G,T},
     V_m_i = potential_energy(sys.replicas[m], neighbors_m)
 
     sys.replicas[n].coords, sys.replicas[m].coords = sys.replicas[m].coords, sys.replicas[n].coords
-    V_n_f = potential_energy(sys.replicas[n], neighbors_m) # use already calculated neighbors
+    V_n_f = potential_energy(sys.replicas[n], neighbors_m) # using already calculated neighbors
     V_m_f = potential_energy(sys.replicas[m], neighbors_n)
 
     Δ = β_sim * (V_n_f - V_n_i + V_m_f - V_m_i)
     should_exchange = Δ <= 0 || rand(rng) < exp(-Δ)
 
-    if should_exchange
-        # exchange velocities
+    if should_exchange # exchange velocities
         sys.replicas[n].velocities, sys.replicas[m].velocities = sys.replicas[m].velocities, sys.replicas[n].velocities
     else # revert coordinate exchange
         sys.replicas[n].coords, sys.replicas[m].coords = sys.replicas[m].coords, sys.replicas[n].coords
@@ -185,12 +203,12 @@ function hremd_exchange!(sys::ReplicaSystem{D,G,T},
     return Δ, should_exchange
 end
 
-function simulate_remd!(sys::ReplicaSystem{D,G,T},
+function simulate_remd!(sys::ReplicaSystem{D, G, T},
                         remd_sim,
                         n_steps::Int,
                         make_exchange!::Function;
                         rng=Random.GLOBAL_RNG,
-                        n_threads::Int=Threads.nthreads()) where {D,G,T}
+                        n_threads::Int=Threads.nthreads()) where {D, G, T}
     if sys.n_replicas != length(remd_sim.simulators)
         throw(ArgumentError("Number of replicas in ReplicaSystem ($(length(sys.n_replicas))) " *
                 "and simulators in TemperatureREMD ($(length(remd_sim.simulators))) do not match."))
@@ -209,7 +227,7 @@ function simulate_remd!(sys::ReplicaSystem{D,G,T},
 
     for cycle in 1:n_cycles
         @sync for idx in eachindex(remd_sim.simulators)
-            Threads.@spawn Molly.simulate!(sys.replicas[idx], remd_sim.simulators[idx], cycle_length;
+            Threads.@spawn simulate!(sys.replicas[idx], remd_sim.simulators[idx], cycle_length;
                                      n_threads=thread_div[idx])
         end
 
@@ -218,19 +236,17 @@ function simulate_remd!(sys::ReplicaSystem{D,G,T},
         for n in (1 + cycle_parity):2:(sys.n_replicas - 1)
             n_attempts += 1
             m = n + 1
-            
             Δ, exchanged = make_exchange!(sys, remd_sim, n, m; rng=rng, n_threads=n_threads)
-
             if exchanged && !isnothing(sys.exchange_logger)
-                log_property!(sys.exchange_logger, sys, nothing, cycle*cycle_length;
-                              indices=(n, m), delta=Δ, n_threads=n_threads)
+                log_property!(sys.exchange_logger, sys, nothing, cycle * cycle_length;
+                                    indices=(n, m), delta=Δ, n_threads=n_threads)
             end
         end
     end
 
     if remaining_steps > 0
         @sync for idx in eachindex(remd_sim.simulators)
-            Threads.@spawn Molly.simulate!(sys.replicas[idx], remd_sim.simulators[idx], remaining_steps;
+            Threads.@spawn simulate!(sys.replicas[idx], remd_sim.simulators[idx], remaining_steps;
                                      n_threads=thread_div[idx])
         end
     end
@@ -248,13 +264,4 @@ end
     nrem = n % k
     n_parts = ntuple(i -> (i <= nrem) ? ndiv+1 : ndiv, k)
     return n_parts
-end
-
-function inverse_temperature(sys::System)
-    if dimension(sys.energy_units) == u"𝐋^2 * 𝐌 * 𝐍^-1 * 𝐓^-2"
-        k_b = sys.k * T(Unitful.Na)
-    else
-        k_b = sys.k
-    end
-    return inv(k_b * temperature(sys))
 end

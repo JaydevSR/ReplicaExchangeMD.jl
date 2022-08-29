@@ -13,5 +13,6 @@ include("types.jl")
 include("simulators.jl")
 include("loggers.jl")
 include("utils.jl")
+include("softcore_potentials.jl")
 
 end # module
