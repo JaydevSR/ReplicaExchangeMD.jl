@@ -6,3 +6,5 @@ Manifest.toml
 *.dll
 
 *.pb.gz
+
+notebooks_and_plots/
