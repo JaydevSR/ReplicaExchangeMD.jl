@@ -1,6 +1,6 @@
 # ReplicaExchangeMD.jl
 
-> This repository is work done by contains work done by Jaydev Singh Rao towards the completion of Google Summer of Code 2022 ([Project Link](https://summerofcode.withgoogle.com/programs/2022/projects/BK7TI3rX)).
+> This repository contains work done by Jaydev Singh Rao towards the completion of Google Summer of Code 2022 ([Project Link](https://summerofcode.withgoogle.com/programs/2022/projects/BK7TI3rX)).
 >
 > All the work done and the process has be logged in [this page](https://jaydevsr.notion.site/GSoC-Contribution-Journal-dc12886cc9644f90b3be1dbd6c748710) as a journal. 
 
